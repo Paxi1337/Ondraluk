@@ -18,7 +18,7 @@ struct myStruct {
 int main() {
 
 	MemoryManager<LinearAllocator> memoryManager(LinearAllocator(1000));
- 	int* test = memoryManager.allocate<int>(200);
+ 	int* test = memoryManager.allocateTyped<int>(50);
 
  	myStruct* s = memoryManager.construct<myStruct>();
 
@@ -26,7 +26,7 @@ int main() {
 
  	memoryManager.destruct(s);
 
- 	char* after = memoryManager.allocate<char>(50);
+ 	char* after = memoryManager.allocateTyped<char>(50);
 
 
 

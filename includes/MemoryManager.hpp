@@ -12,8 +12,10 @@ namespace ondraluk {
 		MemoryManager(Allocator allocator = Allocator());
 		~MemoryManager();
 
+		void* allocateRaw(size_t sizeInBytes);
+
 		template <typename T>
-		T* allocate(size_t size);
+		T* allocateTyped(size_t amountOfTs);
 
 		template <typename T>
 		T* construct();
@@ -38,9 +40,14 @@ namespace ondraluk {
 	}
 
 	template <class Allocator>
+	void* MemoryManager<Allocator>::allocateRaw(size_t sizeInBytes) {
+		return mAllocator.allocate(sizeInBytes);
+	}
+
+	template <class Allocator>
 	template <typename T>
-	T* MemoryManager<Allocator>::allocate(size_t size) {
-		return static_cast<T*>(mAllocator.allocate(size));
+	T* MemoryManager<Allocator>::allocatePODsIntegrals(size_t arraySize) {
+		return static_cast<T*>(mAllocator.allocate(arraySize*sizeof(T)));
 	}
 
 	template <class Allocator>
