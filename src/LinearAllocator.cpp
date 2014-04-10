@@ -1,22 +1,31 @@
 #include "../includes/LinearAllocator.hpp"
 
+#include <cstdio>
+
 using namespace ondraluk;
 
-LinearAllocator::LinearAllocator() : mMem(nullptr), mCurrent(nullptr), mEnd(nullptr) {
+LinearAllocator::LinearAllocator(size_t size) : mMem(nullptr), mCurrent(nullptr), mEnd(nullptr), mSize(size) {
+	init();
 }
 
-LinearAllocator::LinearAllocator(size_t size) {
-	init(size);
+LinearAllocator::LinearAllocator(LinearAllocator&& other) : mMem(other.mMem), mCurrent(other.mMem), mEnd(other.mEnd), mSize(other.mSize) {
+	other.mMem = nullptr;
+	other.mCurrent = nullptr;
+	other.mEnd = nullptr;
+	other.mSize = 0;
 }
 
 LinearAllocator::~LinearAllocator() {
-	::free(mMem);
+	if (mSize > 0 && mMem != nullptr)
+		::free(mMem);
+
+	mMem = nullptr;
 }
 
-void LinearAllocator::init(size_t initSize) {
-	mMem = static_cast<byte*>(::malloc(initSize));
+void LinearAllocator::init() {
+	mMem = static_cast<byte*>(::malloc(mSize));
 	mCurrent = mMem;
-	mEnd = mMem + initSize;
+	mEnd = mMem + mSize;
 }
 
 void* LinearAllocator::allocate(size_t size) {

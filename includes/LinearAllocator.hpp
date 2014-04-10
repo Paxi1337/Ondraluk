@@ -9,15 +9,22 @@ namespace ondraluk {
 
 	class LinearAllocator {
 	public:
-		LinearAllocator();
 		explicit LinearAllocator(size_t size);
+
+		// move constructor
+		LinearAllocator(LinearAllocator&&);
+
 		~LinearAllocator();
 
-		void init(size_t initSize);
+		void init();
 
 		void* allocate(size_t size);
 		void free(void* mem);
 	private:
+
+		// private copy constructor
+		LinearAllocator(const LinearAllocator&) {}
+
 		byte* mMem;
 
 		union {
@@ -26,6 +33,8 @@ namespace ondraluk {
 		};
 
 		byte* mEnd;
+
+		size_t mSize;
 	};
 
 }

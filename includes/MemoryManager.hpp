@@ -3,6 +3,7 @@
 
 #include <cstdlib>
 #include <new>
+#include <utility>
 
 namespace ondraluk {
 
@@ -15,7 +16,7 @@ namespace ondraluk {
 		void* allocateRaw(size_t sizeInBytes);
 
 		template <typename T>
-		T* allocateTyped(size_t amountOfTs);
+		T* allocatePODsIntegrals(size_t amountOfTs);
 
 		template <typename T>
 		T* construct();
@@ -23,15 +24,17 @@ namespace ondraluk {
 		template <typename T>
 		void destruct(T* addr);
 
+		//TODO
+		// constructArray
+		// destructArray
+
 	private:
 		Allocator mAllocator;
 	};
 
-
-
 	template <class Allocator>
-	MemoryManager<Allocator>::MemoryManager(Allocator allocator) : mAllocator(allocator) {
-
+	MemoryManager<Allocator>::MemoryManager(Allocator allocator) : mAllocator(std::move(allocator)) {
+		
 	}
 
 	template <class Allocator>

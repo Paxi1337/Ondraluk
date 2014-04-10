@@ -17,24 +17,25 @@ struct myStruct {
 
 int main() {
 
+	//LinearAllocator la(1000);
 	MemoryManager<LinearAllocator> memoryManager(LinearAllocator(1000));
- 	int* test = memoryManager.allocateTyped<int>(50);
+	int* test = memoryManager.allocatePODsIntegrals<int>(200);
 
- 	myStruct* s = memoryManager.construct<myStruct>();
+	//myStruct* s = memoryManager.construct<myStruct>();
 
- 	void* before = s;
+	//void* before = s;
 
- 	memoryManager.destruct(s);
+	//memoryManager.destruct(s);
 
- 	char* after = memoryManager.allocateTyped<char>(50);
+	//char* after = memoryManager.allocatePODsIntegrals<char>(50);
 
 
 
-	memset(test, 0, 200);
+	//memset(test, 0, 200);
 
-	for(int i = 0; i < 50; ++i) {
-		test[i] = i;
-	}
+	//for(int i = 0; i < 50; ++i) {
+	//	test[i] = i;
+	//}
 
 	return 0;
 }
