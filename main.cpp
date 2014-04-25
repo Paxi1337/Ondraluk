@@ -18,10 +18,16 @@ struct myStruct {
 int main() {
 
 	//LinearAllocator la(1000);
-	MemoryManager<LinearAllocator> memoryManager(LinearAllocator(1000));
-	int* test = memoryManager.allocatePODsIntegrals<int>(200);
+	MemoryManager<LinearAllocator> memoryManager(LinearAllocator(2000));
+//	int* test = memoryManager.allocatePODsIntegrals<int>(200);
 
-	//myStruct* s = memoryManager.construct<myStruct>();
+	myStruct* s = memoryManager.constructArray<myStruct>(100);
+
+	s[0].b = 10;
+	s[99].b = 100;
+
+
+	memoryManager.destructArray(s);
 
 	//void* before = s;
 

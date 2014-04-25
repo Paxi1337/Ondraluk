@@ -24,9 +24,11 @@ namespace ondraluk {
 		template <typename T>
 		void destruct(T* addr);
 
-		//TODO
-		// constructArray
-		// destructArray
+		template <typename T>
+		T* constructArray(size_t n);
+
+		template <typename T>
+		void destructArray(T* addr);
 
 	private:
 		Allocator mAllocator;
@@ -67,6 +69,53 @@ namespace ondraluk {
 		mAllocator.free(static_cast<void*>(addr));
 	}
 
+	template <class Allocator>
+	template <typename T>
+	T* MemoryManager<Allocator>::constructArray(size_t n) {
+		union
+		  {
+		    void* asVoid;
+		    size_t* asSizeT;
+		    T* asT;
+		  };
+
+		// need to allocate + sizeof(size_t) to be able to store n in the four bytes before
+		asVoid = allocateRaw(sizeof(T)*n + sizeof(size_t));
+		*asSizeT++ = n;
+
+		const T* const beforeLast = asT + n;
+		while(asT < beforeLast) {
+			new (asT)T;
+			asT++;
+		}
+
+		// return pointer to the first instance
+		return (asT - n);
+	}
+
+	template <class Allocator>
+	template <typename T>
+	void MemoryManager<Allocator>::destructArray(T* addr) {
+		union
+		  {
+		    size_t* asSizeT;
+		    T* asT;
+		  };
+
+		// set to address
+		asT = addr;
+
+		// get the size which is stored in the bytes before the instance
+		const size_t n = asSizeT[-1];
+
+		// destruct from top
+		for(size_t i = n; i > 0; --i) {
+			asT[i - 1].~T();
+		}
+
+		// free all
+		::free(asSizeT - 1);
+	}
 }
 
 #endif
