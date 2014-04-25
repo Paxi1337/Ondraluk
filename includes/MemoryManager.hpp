@@ -114,7 +114,7 @@ namespace ondraluk {
 		}
 
 		// free all
-		::free(asSizeT - 1);
+		mAllocator.free(static_cast<void*>(asSizeT - 1));
 	}
 }
 
