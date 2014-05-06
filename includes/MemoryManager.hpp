@@ -7,13 +7,32 @@
 
 namespace ondraluk {
 
-	template <class Allocator>
+//	struct BOUNDSCHECKINGMODE {
+//		enum ENUM {
+//			ENABLE,
+//			DISABLE
+//		};
+//	};
+//
+//	struct MEMORYTRACKINGMODE {
+//		enum ENUM {
+//			OFF,
+//			MINIMAL,
+//			DETAILED
+//		};
+//	};
+
+	template <class Allocator, class BoundsChecker, class Tracker>
 	class MemoryManager {
 	public:
-		MemoryManager(Allocator allocator = Allocator());
+		MemoryManager(Allocator allocator = Allocator(),
+					  BoundsChecker boundsChecker = BoundsChecker(),
+					  Tracker tracker = Tracker());
+
 		~MemoryManager();
 
 		void* allocateRaw(size_t sizeInBytes);
+		void deallocateRaw(void* addr);
 
 		template <typename T>
 		T* allocatePODsIntegrals(size_t amountOfTs);
@@ -32,46 +51,76 @@ namespace ondraluk {
 
 	private:
 		Allocator mAllocator;
+		BoundsChecker mBoundsChecker;
+		Tracker mTracker;
 	};
 
-	template <class Allocator>
-	MemoryManager<Allocator>::MemoryManager(Allocator allocator) : mAllocator(std::move(allocator)) {
+	template <class Allocator, class BoundsChecker, class Tracker>
+	MemoryManager<Allocator, BoundsChecker, Tracker>::MemoryManager(Allocator allocator, BoundsChecker boundsChecker, Tracker tracker) : mAllocator(std::move(allocator)),
+																											     mBoundsChecker(std::move(boundsChecker)),
+																											     mTracker(std::move(tracker)) {
 		
 	}
 
-	template <class Allocator>
-	MemoryManager<Allocator>::~MemoryManager() {
+	template <class Allocator, class BoundsChecker, class Tracker>
+	MemoryManager<Allocator, BoundsChecker, Tracker>::~MemoryManager() {
 
 	}
 
-	template <class Allocator>
-	void* MemoryManager<Allocator>::allocateRaw(size_t sizeInBytes) {
-		return mAllocator.allocate(sizeInBytes);
+	template <class Allocator, class BoundsChecker, class Tracker>
+	void* MemoryManager<Allocator, BoundsChecker, Tracker>::allocateRaw(size_t sizeInBytes) {
+		size_t size = sizeInBytes + 2 * BoundsChecker::BOUNDSIZE;
+
+		union {
+			void* asVoid;
+			unsigned char* asByte;
+		};
+
+		asVoid = mAllocator.allocate(size);
+
+		mBoundsChecker(asVoid, size);
+
+		asByte+=BoundsChecker::BOUNDSIZE;
+
+		return asVoid;
 	}
 
-	template <class Allocator>
+	template <class Allocator, class BoundsChecker, class Tracker>
+	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocateRaw(void* addr) {
+		union {
+			void* asVoid;
+			unsigned char* asByte;
+		};
+
+		asVoid = addr;
+		asByte-=BoundsChecker::BOUNDSIZE;
+
+		mAllocator.free(asVoid);
+	}
+
+	template <class Allocator, class BoundsChecker, class Tracker>
 	template <typename T>
-	T* MemoryManager<Allocator>::allocatePODsIntegrals(size_t arraySize) {
+	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocatePODsIntegrals(size_t arraySize) {
 		return static_cast<T*>(mAllocator.allocate(arraySize*sizeof(T)));
 	}
 
-	template <class Allocator>
+	template <class Allocator, class BoundsChecker, class Tracker>
 	template <typename T>
-	T* MemoryManager<Allocator>::construct() {
+	T* MemoryManager<Allocator, BoundsChecker, Tracker>::construct() {
 		T* obj = new (mAllocator.allocate(sizeof(T))) T;
 		return obj;
 	}
 
-	template <class Allocator>
+	template <class Allocator, class BoundsChecker, class Tracker>
 	template <typename T>
-	void MemoryManager<Allocator>::destruct(T* addr) {
+	void MemoryManager<Allocator, BoundsChecker, Tracker>::destruct(T* addr) {
 		addr->~T();
 		mAllocator.free(static_cast<void*>(addr));
 	}
 
-	template <class Allocator>
+	template <class Allocator, class BoundsChecker, class Tracker>
 	template <typename T>
-	T* MemoryManager<Allocator>::constructArray(size_t n) {
+	T* MemoryManager<Allocator, BoundsChecker, Tracker>::constructArray(size_t n) {
 		union
 		  {
 		    void* asVoid;
@@ -81,7 +130,8 @@ namespace ondraluk {
 
 		// need to allocate + sizeof(size_t) to be able to store n in the four bytes before
 		asVoid = allocateRaw(sizeof(T)*n + sizeof(size_t));
-		*asSizeT++ = n;
+		asSizeT += sizeof(size_t);
+		*asSizeT = n;
 
 		const T* const beforeLast = asT + n;
 		while(asT < beforeLast) {
@@ -93,9 +143,9 @@ namespace ondraluk {
 		return (asT - n);
 	}
 
-	template <class Allocator>
+	template <class Allocator, class BoundsChecker, class Tracker>
 	template <typename T>
-	void MemoryManager<Allocator>::destructArray(T* addr) {
+	void MemoryManager<Allocator, BoundsChecker, Tracker>::destructArray(T* addr) {
 		union
 		  {
 		    size_t* asSizeT;
@@ -109,8 +159,8 @@ namespace ondraluk {
 		const size_t n = asSizeT[-1];
 
 		// destruct from top
-		for(size_t i = n; i > 0; --i) {
-			asT[i - 1].~T();
+		for(size_t i = n - 1; i > 0; --i) {
+			asT[i].~T();
 		}
 
 		// free all
