@@ -2,10 +2,12 @@
 #include "includes/LinearAllocator.hpp"
 
 #include <string.h>
+#include <cstdio>
+#include <type_traits>
 
 template <int N, int S>
 struct BoundsCheckingPolicy {
-	void operator()(void* begin, size_t size) const {
+	void fill(void* begin, size_t size) const {
 
 		union {
 			unsigned char* asByte;
@@ -14,29 +16,42 @@ struct BoundsCheckingPolicy {
 		};
 
 		asVoid = begin;
-		memset(asVoid, SYMBOL, BOUNDSIZE);
+		memset(asVoid, SYMBOLARR[0], BOUNDSIZE);
 		asByte += size - BOUNDSIZE;
-		memset(asVoid, SYMBOL, BOUNDSIZE);
+		memset(asVoid, SYMBOLARR[0], BOUNDSIZE);
+	}
+
+	void check(void* begin, size_t size) const {
+		union {
+					unsigned char* asByte;
+					int* asInt;
+					void* asVoid;
+				};
+
+//		if(memcmp()) {
+//
+//		}
+
 	}
 
 	static_assert(N > 1, "N < 2");
-	static const int BOUNDSIZE = N;
-	static const int SYMBOL = S;
+	const int BOUNDSIZE = N;
+	const int SYMBOLARR[N] = {S};
 };
 
 template <>
 struct BoundsCheckingPolicy<0, 0> {
-	void operator()(void*) const {
+	void fill(void*) const {
 	}
 
-	static const int BOUNDSIZE = 0;
-	static const int SYMBOL = 0;
+	const int BOUNDSIZE = 0;
+	const int SYMBOL = 0;
 };
 
 typedef BoundsCheckingPolicy<0,0> NoBoundsCheckingPolicy;
 
 struct NoMemoryTracking {
-	void track(void* originalAddr, void* offsetAddr, size_t size, ) {
+	void track(void*, size_t, size_t, unsigned int) {
 	}
 };
 
@@ -58,6 +73,24 @@ int main() {
 
 	//LinearAllocator la(1000);
 	MemoryManager<LinearAllocator, BoundsCheckingPolicy<4,0xCD>, NoMemoryTracking> memoryManager(LinearAllocator(2000));
+
+
+	int* t = memoryManager.allocate<int>();
+
+	myStruct* ms = memoryManager.allocate<myStruct>(2);
+
+	memoryManager.deallocate<int>(t);
+
+	//int* t2 = memoryManager.allocate<int>();
+
+	memoryManager.deallocate<myStruct, IS_ARRAY::TRUE>(ms);
+
+	//myStruct* ms2 = memoryManager.allocate<myStruct>(2);
+
+	//printf("%d\n", std::is_array<int>::value);
+	//printf("%d\n", std::is_array<int*>::value);
+	//printf("%d\n", std::is_array<int[]>::value);
+
 //	int* test = memoryManager.allocatePODsIntegrals<int>(200);
 
 	//myStruct* s = memoryManager.constructArray<myStruct>(100);
@@ -68,11 +101,13 @@ int main() {
 
 	//memoryManager.destructArray(s);
 
-	void* mem = memoryManager.allocateRaw(4);
+	//void* mem = memoryManager.allocateRaw(4);
 
-	memoryManager.deallocateRaw(mem);
+	//memoryManager.deallocateRaw(mem);
 
-	void* mem4 = memoryManager.allocateRaw(4);
+	//void* mem4 = memoryManager.allocateRaw(4);
+
+
 
 
 

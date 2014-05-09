@@ -4,8 +4,17 @@
 #include <cstdlib>
 #include <new>
 #include <utility>
+#include <type_traits>
+
+
+template <bool> struct podness {};
+template <bool> struct arrayness {};
+
+//template <> struct<true> podness { static const size_t = };
 
 namespace ondraluk {
+
+enum IS_ARRAY { FALSE, TRUE};
 
 //	struct BOUNDSCHECKINGMODE {
 //		enum ENUM {
@@ -31,25 +40,42 @@ namespace ondraluk {
 
 		~MemoryManager();
 
-		void* allocateRaw(size_t sizeInBytes);
-		void deallocateRaw(void* addr);
+		template <typename T>
+		T* allocate();
 
 		template <typename T>
-		T* allocatePODsIntegrals(size_t amountOfTs);
+		T* allocate(size_t n);
 
-		template <typename T>
-		T* construct();
-
-		template <typename T>
-		void destruct(T* addr);
-
-		template <typename T>
-		T* constructArray(size_t n);
-
-		template <typename T>
-		void destructArray(T* addr);
+		template <typename T, IS_ARRAY E = IS_ARRAY::FALSE>
+		void deallocate(T* addr);
 
 	private:
+
+		template <typename T>
+		T* allocate(podness<true>, size_t n);
+
+		template <typename T>
+		T* allocate(podness<false>, size_t n);
+
+		template <typename T>
+		T* allocate(podness<true>);
+
+		template <typename T>
+		T* allocate(podness<false>);
+
+		template <typename T>
+		void deallocate(podness<true>, T* addr, arrayness<true>);
+
+		template <typename T>
+		void deallocate(podness<false>, T* addr, arrayness<true>);
+
+		template <typename T>
+		void deallocate(podness<true>, T* addr, arrayness<false>);
+
+		template <typename T>
+		void deallocate(podness<false>, T* addr, arrayness<false>);
+
+
 		Allocator mAllocator;
 		BoundsChecker mBoundsChecker;
 		Tracker mTracker;
@@ -68,70 +94,63 @@ namespace ondraluk {
 	}
 
 	template <class Allocator, class BoundsChecker, class Tracker>
-	void* MemoryManager<Allocator, BoundsChecker, Tracker>::allocateRaw(size_t sizeInBytes) {
-		size_t size = sizeInBytes + 2 * BoundsChecker::BOUNDSIZE;
+	template <typename T>
+	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate() {
+		return allocate<T>(podness<std::is_pod<T>::value >());
+	}
 
-		union {
+	template <class Allocator, class BoundsChecker, class Tracker>
+	template <typename T>
+	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate(size_t n) {
+		return allocate<T>(podness<std::is_pod<T>::value >(), n);
+	}
+
+	template <class Allocator, class BoundsChecker, class Tracker>
+	template <typename T>
+	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate(podness<true>, size_t n) {
+
+		union
+	    {
 			void* asVoid;
+			size_t* asSizeT;
+			T* asT;
 			unsigned char* asByte;
-		};
+	     };
 
+		size_t size = sizeof(T)*n + sizeof(size_t) + 2 * mBoundsChecker.BOUNDSIZE;
 		asVoid = mAllocator.allocate(size);
 
-		mBoundsChecker(asVoid, size);
+		mBoundsChecker.fill(asVoid, size);
 
-		asByte+=BoundsChecker::BOUNDSIZE;
+		asByte += mBoundsChecker.BOUNDSIZE;
 
-		return asVoid;
-	}
-
-	template <class Allocator, class BoundsChecker, class Tracker>
-	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocateRaw(void* addr) {
-		union {
-			void* asVoid;
-			unsigned char* asByte;
-		};
-
-		asVoid = addr;
-		asByte-=BoundsChecker::BOUNDSIZE;
-
-		mAllocator.free(asVoid);
+		return asT;
 	}
 
 	template <class Allocator, class BoundsChecker, class Tracker>
 	template <typename T>
-	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocatePODsIntegrals(size_t arraySize) {
-		return static_cast<T*>(mAllocator.allocate(arraySize*sizeof(T)));
-	}
-
-	template <class Allocator, class BoundsChecker, class Tracker>
-	template <typename T>
-	T* MemoryManager<Allocator, BoundsChecker, Tracker>::construct() {
-		T* obj = new (mAllocator.allocate(sizeof(T))) T;
-		return obj;
-	}
-
-	template <class Allocator, class BoundsChecker, class Tracker>
-	template <typename T>
-	void MemoryManager<Allocator, BoundsChecker, Tracker>::destruct(T* addr) {
-		addr->~T();
-		mAllocator.free(static_cast<void*>(addr));
-	}
-
-	template <class Allocator, class BoundsChecker, class Tracker>
-	template <typename T>
-	T* MemoryManager<Allocator, BoundsChecker, Tracker>::constructArray(size_t n) {
+	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate(podness<false>, size_t n) {
 		union
 		  {
 		    void* asVoid;
 		    size_t* asSizeT;
 		    T* asT;
+		    unsigned char* asByte;
 		  };
 
+		size_t size = sizeof(T)*n + sizeof(size_t) + 2 * mBoundsChecker.BOUNDSIZE;
+
 		// need to allocate + sizeof(size_t) to be able to store n in the four bytes before
-		asVoid = allocateRaw(sizeof(T)*n + sizeof(size_t));
-		asSizeT += sizeof(size_t);
+		asVoid = mAllocator.allocate(size);
+
+		mBoundsChecker.fill(asVoid, size);
+
+		asByte += mBoundsChecker.BOUNDSIZE;
+
 		*asSizeT = n;
+
+		asByte += sizeof(size_t);
+
 
 		const T* const beforeLast = asT + n;
 		while(asT < beforeLast) {
@@ -145,11 +164,85 @@ namespace ondraluk {
 
 	template <class Allocator, class BoundsChecker, class Tracker>
 	template <typename T>
-	void MemoryManager<Allocator, BoundsChecker, Tracker>::destructArray(T* addr) {
+	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate(podness<false>) {
+		size_t size = sizeof(T) + 2 * mBoundsChecker.BOUNDSIZE;
+
+		void* addr = mAllocator.allocate(size);
+
+
+		union {
+			void* asVoid;
+			unsigned char* asByte;
+		};
+
+		asVoid = addr;
+
+		mBoundsChecker.fill(asVoid, size);
+
+		asByte += mBoundsChecker.BOUNDSIZE;
+
+
+
+		T* obj = new (asVoid) T;
+		return obj;
+	}
+
+	template <class Allocator, class BoundsChecker, class Tracker>
+	template <typename T>
+	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate(podness<true>) {
+		size_t size = sizeof(T) + 2 * mBoundsChecker.BOUNDSIZE;
+
+		void* addr = mAllocator.allocate(size);
+
+		union {
+			void* asVoid;
+			unsigned char* asByte;
+			T* asT;
+		};
+
+		asVoid = addr;
+
+		mBoundsChecker.fill(asVoid, size);
+
+		asByte += mBoundsChecker.BOUNDSIZE;
+
+
+		return asT;
+	}
+
+//	template <class Allocator, class BoundsChecker, class Tracker>
+//	template <typename T>
+//	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocate(T* addr) {
+//		deallocate<T>(podness<std::is_pod<T>::value >(), addr, arrayness<false>());
+//	}
+
+	template <class Allocator, class BoundsChecker, class Tracker>
+	template <typename T, IS_ARRAY E>
+	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocate(T* addr) {
+		deallocate<T>(podness<std::is_pod<T>::value >(), addr, arrayness<E>());
+	}
+
+	template <class Allocator, class BoundsChecker, class Tracker>
+	template <typename T>
+	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocate(podness<true>, T* addr, arrayness<true>) {
+		union {
+			void* asVoid;
+			unsigned char* asByte;
+		};
+
+		asVoid = addr;
+		asByte -= mBoundsChecker.BOUNDSIZE;
+
+		mAllocator.free(asVoid);
+	}
+
+	template <class Allocator, class BoundsChecker, class Tracker>
+	template <typename T>
+	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocate(podness<false>, T* addr, arrayness<true>) {
 		union
 		  {
-		    size_t* asSizeT;
-		    T* asT;
+			size_t* asSizeT;
+			T* asT;
 		  };
 
 		// set to address
@@ -163,8 +256,48 @@ namespace ondraluk {
 			asT[i].~T();
 		}
 
+		union {
+			void* asVoid;
+			unsigned char* asByte;
+		};
+
+		asVoid = addr;
+		asByte -= sizeof(size_t);
+		asByte -= mBoundsChecker.BOUNDSIZE;
+
 		// free all
-		mAllocator.free(static_cast<void*>(asSizeT - 1));
+		mAllocator.free(asVoid);
+	}
+
+	template <class Allocator, class BoundsChecker, class Tracker>
+	template <typename T>
+	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocate(podness<true>, T* addr, arrayness<false>) {
+
+		union {
+			void* asVoid;
+			unsigned char* asByte;
+		};
+
+		asVoid = addr;
+		asByte -= mBoundsChecker.BOUNDSIZE;
+
+		mAllocator.free(asVoid);
+	}
+
+	template <class Allocator, class BoundsChecker, class Tracker>
+	template <typename T>
+	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocate(podness<false>, T* addr, arrayness<false>) {
+		addr->~T();
+
+		union {
+			void* asVoid;
+			unsigned char* asByte;
+		};
+
+		asVoid = addr;
+		asByte -= mBoundsChecker.BOUNDSIZE;
+
+		mAllocator.free(asVoid);
 	}
 }
 
