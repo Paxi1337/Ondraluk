@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <new>
 #include <type_traits>
+#include <utility>
 
 template <bool> struct podness {};
 template <bool> struct arrayness { static const bool value = false; };
@@ -150,10 +151,11 @@ enum IS_ARRAY { FALSE, TRUE};
 	};
 
 	template <class Allocator, class BoundsChecker, class Tracker>
-	MemoryManager<Allocator, BoundsChecker, Tracker>::MemoryManager(Allocator allocator, BoundsChecker boundsChecker, Tracker tracker) : mAllocator(std::move(allocator)),
-																											     mBoundsChecker(std::move(boundsChecker)),
-																											     mTracker(std::move(tracker)) {
-		
+	MemoryManager<Allocator, BoundsChecker, Tracker>::MemoryManager(Allocator allocator, BoundsChecker boundsChecker, Tracker tracker) :
+													mAllocator(std::move(allocator)),
+													mBoundsChecker(std::move(boundsChecker)),
+													mTracker(std::move(tracker)) {
+		mTracker.open("log.txt");
 	}
 
 	template <class Allocator, class BoundsChecker, class Tracker>
@@ -163,13 +165,29 @@ enum IS_ARRAY { FALSE, TRUE};
 	template <class Allocator, class BoundsChecker, class Tracker>
 	template <typename T>
 	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate() {
-		return allocate<T>(podness<std::is_pod<T>::value >());
+		union
+		{
+			void* asVoid;
+			T* asT;
+		 };
+
+		asT = allocate<T>(podness<std::is_pod<T>::value >());
+		mTracker.track(asVoid, sizeof(T), sizeof(T), __LINE__);
+		return asT;
 	}
 
 	template <class Allocator, class BoundsChecker, class Tracker>
 	template <typename T>
 	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate(size_t n) {
-		return allocate<T>(podness<std::is_pod<T>::value >(), n);
+		union
+		{
+			void* asVoid;
+			T* asT;
+		 };
+
+		asT = allocate<T>(podness<std::is_pod<T>::value >(), n);
+		mTracker.track(asVoid, n * sizeof(T), n * sizeof(T), __LINE__);
+		return asT;
 	}
 
 	template <class Allocator, class BoundsChecker, class Tracker>
