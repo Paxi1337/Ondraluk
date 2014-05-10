@@ -4,55 +4,76 @@
 #include <string.h>
 #include <cstdio>
 #include <type_traits>
+#include <cassert>
 
-template <int N, int S>
+template <size_t N, int S>
 struct BoundsCheckingPolicy {
 	void fill(void* begin, size_t size) const {
 
 		union {
 			unsigned char* asByte;
-			int* asInt;
+			size_t* asSizeT;
 			void* asVoid;
 		};
 
 		asVoid = begin;
-		memset(asVoid, SYMBOLARR[0], BOUNDSIZE);
-		asByte += size - BOUNDSIZE;
-		memset(asVoid, SYMBOLARR[0], BOUNDSIZE);
+
+		*asSizeT = size;
+		asByte += sizeof(size_t);
+
+		memset(asVoid, SYMBOL, BOUNDSIZE);
+		asByte += size - BOUNDSIZE - SIZEOFALLOCATION;
+		memset(asVoid, SYMBOL, BOUNDSIZE);
 	}
 
-	void check(void* begin, size_t size) const {
+	void check(void* begin, size_t adjustment = 0) const {
 		union {
-					unsigned char* asByte;
-					int* asInt;
-					void* asVoid;
-				};
+			unsigned char* asByte;
+			size_t* asSizeT;
+			void* asVoid;
+		};
 
-//		if(memcmp()) {
-//
-//		}
+		asVoid = begin;
+		
+		asByte -= (SIZEOFALLOCATION + BOUNDSIZE + adjustment);
 
+		size_t allocationSize = *asSizeT;
+
+		asByte += SIZEOFALLOCATION;
+
+		int tmp[N];
+		memset(tmp, SYMBOL, N);
+
+		if (memcmp(asVoid, tmp, N) == 0) {
+
+			asByte += (allocationSize - BOUNDSIZE - SIZEOFALLOCATION);
+			if (memcmp(asVoid, tmp, N) == 0) {
+				return;
+			}
+		}
+
+		assert(false);
 	}
 
 	static_assert(N > 1, "N < 2");
-	const int BOUNDSIZE = N;
-	const int SYMBOLARR[N] = {S};
+	size_t BOUNDSIZE = N;
+	size_t SIZEOFALLOCATION = sizeof(size_t);
+	int SYMBOL = S;
 };
 
 template <>
 struct BoundsCheckingPolicy<0, 0> {
-	void fill(void*) const {
-	}
+	void fill(void*, size_t) const {};
+	void check(void*, size_t adjustment = 0) const {};
 
-	const int BOUNDSIZE = 0;
-	const int SYMBOL = 0;
+	size_t BOUNDSIZE = 0;
+	size_t SIZEOFALLOCATION = 0;
 };
 
 typedef BoundsCheckingPolicy<0,0> NoBoundsCheckingPolicy;
 
 struct NoMemoryTracking {
-	void track(void*, size_t, size_t, unsigned int) {
-	}
+	void track(void*, size_t, size_t, unsigned int);
 };
 
 #include <memory.h>
@@ -71,59 +92,19 @@ struct myStruct {
 
 int main() {
 
-	//LinearAllocator la(1000);
-	MemoryManager<LinearAllocator, BoundsCheckingPolicy<4,0xCD>, NoMemoryTracking> memoryManager(LinearAllocator(2000));
-
+	LinearAllocator la(1000);
+	MemoryManager<LinearAllocator, BoundsCheckingPolicy<4,0xEF>, NoMemoryTracking> memoryManager(LinearAllocator(2000));
+	//MemoryManager<LinearAllocator, NoBoundsCheckingPolicy, NoMemoryTracking> memoryManager2(LinearAllocator(2000));
 
 	int* t = memoryManager.allocate<int>();
-
+	//int* tp = memoryManager2.allocate<int>();
+		
 	myStruct* ms = memoryManager.allocate<myStruct>(2);
 
-	memoryManager.deallocate<int>(t);
-
-	//int* t2 = memoryManager.allocate<int>();
+	memoryManager.deallocate<int, IS_ARRAY::FALSE>(t);
 
 	memoryManager.deallocate<myStruct, IS_ARRAY::TRUE>(ms);
 
-	//myStruct* ms2 = memoryManager.allocate<myStruct>(2);
-
-	//printf("%d\n", std::is_array<int>::value);
-	//printf("%d\n", std::is_array<int*>::value);
-	//printf("%d\n", std::is_array<int[]>::value);
-
-//	int* test = memoryManager.allocatePODsIntegrals<int>(200);
-
-	//myStruct* s = memoryManager.constructArray<myStruct>(100);
-
-	//s[0].b = 10;
-	//s[99].b = 100;
-
-
-	//memoryManager.destructArray(s);
-
-	//void* mem = memoryManager.allocateRaw(4);
-
-	//memoryManager.deallocateRaw(mem);
-
-	//void* mem4 = memoryManager.allocateRaw(4);
-
-
-
-
-
-	//void* before = s;
-
-	//memoryManager.destruct(s);
-
-	//char* after = memoryManager.allocatePODsIntegrals<char>(50);
-
-
-
-	//memset(test, 0, 200);
-
-	//for(int i = 0; i < 50; ++i) {
-	//	test[i] = i;
-	//}
 
 	return 0;
 }

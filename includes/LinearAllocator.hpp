@@ -23,7 +23,7 @@ namespace ondraluk {
 	private:
 
 		// private copy constructor
-		LinearAllocator(const LinearAllocator&) {}
+		LinearAllocator(const LinearAllocator&);
 
 		byte* mMem;
 
