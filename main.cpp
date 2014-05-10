@@ -1,3 +1,12 @@
+/**
+ * This file is part of the Ondraluk memory managing library
+ *
+ * @author Christian Ondracek & Lukas Oberbichler
+ * @date May 2014
+ *
+ * @file main.cpp
+ */
+
 #include "includes/MemoryManager.hpp"
 #include "includes/LinearAllocator.hpp"
 
@@ -6,8 +15,25 @@
 #include <type_traits>
 #include <cassert>
 
+/**
+ * BoundsCheckingPolicy
+ *
+ * Provides functions to fill memory with a given symbol and later check if the bounds were exceeded to
+ * locate memory leaks
+ */
 template <size_t N, int S>
 struct BoundsCheckingPolicy {
+
+	/**
+	 * fill
+	 *
+	 * @param void* begin
+	 * @param size_t size
+
+	 * Fills BOUNDSIZE bytes at beginning and end at given memory addr with SYMBOL
+	 *
+	 * @return void
+	 */
 	void fill(void* begin, size_t size) const {
 
 		union {
@@ -26,6 +52,16 @@ struct BoundsCheckingPolicy {
 		memset(asVoid, SYMBOL, BOUNDSIZE);
 	}
 
+	/**
+	 * check
+	 *
+	 * @param void* begin
+	 * @param size_t adujstment
+
+	 * Fills BOUNDSIZE bytes at beginning and end at given memory addr with SYMBOL
+	 *
+	 * @return void
+	 */
 	void check(void* begin, size_t adjustment = 0) const {
 		union {
 			unsigned char* asByte;
@@ -61,6 +97,9 @@ struct BoundsCheckingPolicy {
 	int SYMBOL = S;
 };
 
+/**
+ * Specialization of a BoundsCheckingPolicy with 0-byte size
+ */
 template <>
 struct BoundsCheckingPolicy<0, 0> {
 	void fill(void*, size_t) const {};
@@ -72,6 +111,9 @@ struct BoundsCheckingPolicy<0, 0> {
 
 typedef BoundsCheckingPolicy<0,0> NoBoundsCheckingPolicy;
 
+/**
+ * MemoryTrackingPolicy
+ */
 struct NoMemoryTracking {
 	void track(void*, size_t, size_t, unsigned int);
 };

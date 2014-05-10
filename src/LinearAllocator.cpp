@@ -1,3 +1,12 @@
+/**
+ * This file is part of the Ondraluk memory managing library
+ *
+ * @author Christian Ondracek & Lukas Oberbichler
+ * @date May 2014
+ *
+ * @file LinearAllocator.cpp
+ */
+
 #include "../includes/LinearAllocator.hpp"
 
 #include <cstdio>

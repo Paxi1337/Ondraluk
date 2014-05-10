@@ -1,3 +1,12 @@
+/**
+ * This file is part of the Ondraluk memory managing library
+ *
+ * @author Christian Ondracek & Lukas Oberbichler
+ * @date May 2014
+ *
+ * @file MemoryManager.hpp
+ */
+
 #ifndef MEMORYMANAGER_HPP
 #define MEMORYMANAGER_HPP
 
@@ -16,21 +25,92 @@ namespace ondraluk {
 
 enum IS_ARRAY { FALSE, TRUE};
 
+	/**
+	 * MemoryManager
+	 *
+	 * Policy-based memory manager class
+	 * 	Allocator
+	 * 	BoundsChecker
+	 * 	Tracker
+	 *
+	 * Interoperates with the given policies to
+	 * 	-allocate / deallocate memory
+	 * 	-bounds checking
+	 * 	-memory tracking
+	 */
 	template <class Allocator, class BoundsChecker, class Tracker>
 	class MemoryManager {
 	public:
+
+		/**
+		 * Constructor
+		 *
+		 * @param allocator
+		 * @param boundsChecker
+		 * @param tracker
+		 */
 		MemoryManager(Allocator allocator = Allocator(),
 					  BoundsChecker boundsChecker = BoundsChecker(),
 					  Tracker tracker = Tracker());
 
+		/**
+		 * Destructor
+		 */
 		~MemoryManager();
 
+		/**
+		 * allocate
+		 *
+		 * Allocates memory for one T
+		 * Uses a variation of the intToType template to deduce if the user wants to
+		 *
+		 * 	- allocate a pod type variable or
+		 * 	- construct an object
+		 *
+		 *
+		 * @see MemoryManager::allocate(podness<true>)
+		 * @see MemoryManager::allocate(podness<false>)
+		 *
+		 * @return T*
+		 */
 		template <typename T>
 		T* allocate();
 
+		/**
+		 * allocate
+		 *
+		 * @param size_t n
+		 *
+		 * Allocates memory for n T
+		 * Uses a variation of the intToType template to deduce if the user wants to
+		 *
+		 * 	- allocate an array of pod type variables or
+		 * 	- construct an array of objects
+		 *
+		 * @see MemoryManager::allocate(podness<true>, size_t n)
+		 * @see MemoryManager::allocate(podness<false>, size_t n)
+		 *
+		 * @return T*
+		 */
 		template <typename T>
 		T* allocate(size_t n);
 
+		/**
+		 * deallocate
+		 *
+		 * @param T* addr
+		 *
+		 * Deallocates the memory at given addr
+		 * Second template parameter declares the arrayness
+		 * Uses a variation of the intToType template to deduce if the user wants to
+		 *
+		 * 	- deallocate pod(s) or
+		 * 	- destruct object(s)
+		 *
+		 * @see MemoryManager::deallocate(T* addr)
+		 *
+		 * @return void
+		 */
 		template <typename T, IS_ARRAY E>
 		void deallocate(T* addr);
 
@@ -60,6 +140,9 @@ enum IS_ARRAY { FALSE, TRUE};
 		template <typename T>
 		void deallocate(podness<false>, T*& addr, arrayness<false>);
 
+		/**
+		 * Variables
+		 */
 
 		Allocator mAllocator;
 		BoundsChecker mBoundsChecker;
@@ -75,7 +158,6 @@ enum IS_ARRAY { FALSE, TRUE};
 
 	template <class Allocator, class BoundsChecker, class Tracker>
 	MemoryManager<Allocator, BoundsChecker, Tracker>::~MemoryManager() {
-
 	}
 
 	template <class Allocator, class BoundsChecker, class Tracker>
