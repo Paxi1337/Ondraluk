@@ -14,9 +14,11 @@
 #include <cstdio>
 #include <type_traits>
 #include <cassert>
+#include <memory>
 
 #include <fstream>
 #include <iomanip>
+
 
 /**
  * BoundsCheckingPolicy
@@ -114,64 +116,6 @@ struct BoundsCheckingPolicy<0, 0> {
 
 typedef BoundsCheckingPolicy<0,0> NoBoundsCheckingPolicy;
 
-/**
- * MemoryTrackingPolicy
- */
-struct NoMemoryTracking {
-	void track(void*, size_t, size_t, unsigned int);
-};
-
-struct FileMemoryTracker {
-
-public:
-
-	void open(std::string filename) {
-		mStream = new std::ofstream;
-		mStream->open(filename.c_str(), std::ios::binary);
-	}
-
-	void track(void* mem, size_t offset, size_t size, unsigned int line) {
-		union
-		  {
-			void* asVoid;
-			unsigned char* asByte;
-		  };
-
-		asVoid = mem;
-
-		char buffer[255];
-
-		int n = sprintf(buffer, "Memory allocated:\n"
-				"\tstartaddress: %#08x\n"
-				"\tendaddress: %#08x\n"
-				"\tsize: %u \n"
-				"\tline: %u\n", asByte, (asByte + offset), size, line);
-
-		buffer[n] = '\0';
-		*mStream << buffer;
-	}
-
-private:
-	std::ofstream* mStream;
-};
-
-struct ConsoleMemoryTracker {
-	void track(void* mem, size_t offset, size_t size, unsigned int line) {
-		union
-		  {
-			void* asVoid;
-			unsigned char* asByte;
-		  };
-
-		asVoid = mem;
-
-		printf("Memory allocated:\n"
-				"\tstartaddress: %#08x\n"
-				"\tendaddress: %#08x\n"
-				"\tsize: %u \n"
-				"\tline: %u\n", asByte, (asByte + offset), size, line);
-	}
-};
 
 #include <memory.h>
 
@@ -187,20 +131,32 @@ struct myStruct {
 	char d;
 };
 
+using namespace debuglib::logger;
+
 int main() {
 
+	//FileLogger f(NoFilter(),SimpleFormatter(),FileOutputter("log.txt"));
+
+	ConsoleLogger g;
+
 	LinearAllocator la(1000);
-	MemoryManager<LinearAllocator, BoundsCheckingPolicy<4,0xEF>, FileMemoryTracker> memoryManager(LinearAllocator(2000));
+	MemoryManager<LinearAllocator, BoundsCheckingPolicy<4, 0xEF>> memoryManager(LinearAllocator(2000), BoundsCheckingPolicy<4, 0xEF>());
 	//MemoryManager<LinearAllocator, NoBoundsCheckingPolicy, NoMemoryTracking> memoryManager2(LinearAllocator(2000));
 
-	int* t = memoryManager.allocate<int>();
+	int* t = memoryManager.allocate<int, 4>();
+
+	//char* tCh = reinterpret_cast<char*>(t);
+	//tCh--;
+	//*tCh = 0xDD;
+
+
 	//int* tp = memoryManager2.allocate<int>();
 		
-	myStruct* ms = memoryManager.allocate<myStruct>(2);
+	//myStruct* ms = memoryManager.allocate<myStruct>(2);
 
 	memoryManager.deallocate<int, IS_ARRAY::FALSE>(t);
-
-	memoryManager.deallocate<myStruct, IS_ARRAY::TRUE>(ms);
+//
+//	memoryManager.deallocate<myStruct, IS_ARRAY::TRUE>(ms);
 
 
 	return 0;

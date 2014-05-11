@@ -15,16 +15,31 @@
 #include <type_traits>
 #include <utility>
 
+#define ONDRALUK_TRACKING 1
+
+#ifdef ONDRALUK_TRACKING
+#include "Logger.h"
+#endif
+
 template <bool> struct podness {};
 template <bool> struct arrayness { static const bool value = false; };
 template <> struct arrayness<true> { static const bool value = true; };
 
-template <bool> struct arrayajustment { static const size_t adjustment = 0; };
-template <> struct arrayajustment<true> { static const size_t adjustment = 4; };
+template <bool> struct arrayallocation {};
+
+template <size_t n>
+struct wasarrayallocation {
+	static_assert(n>0, "allocation of 0 bytes");
+	static const bool value = n > 1;
+};
+
+
+template <bool> struct arrayadjustment { static const size_t adjustment = 0; };
+template <> struct arrayadjustment<true> { static const size_t adjustment = 4; };
 
 namespace ondraluk {
 
-enum IS_ARRAY { FALSE, TRUE};
+	enum IS_ARRAY { FALSE, TRUE};
 
 	/**
 	 * MemoryManager
@@ -32,27 +47,33 @@ enum IS_ARRAY { FALSE, TRUE};
 	 * Policy-based memory manager class
 	 * 	Allocator
 	 * 	BoundsChecker
-	 * 	Tracker
 	 *
 	 * Interoperates with the given policies to
 	 * 	-allocate / deallocate memory
 	 * 	-bounds checking
-	 * 	-memory tracking
 	 */
-	template <class Allocator, class BoundsChecker, class Tracker>
+	template <class Allocator, class BoundsChecker>
 	class MemoryManager {
 	public:
+
+		template <typename T>
+		struct Allocation {
+			union {
+				unsigned char* mByte;
+				void* mVoid;
+				T* mT;
+			};
+			size_t mInternalSize;
+		};
 
 		/**
 		 * Constructor
 		 *
 		 * @param allocator
 		 * @param boundsChecker
-		 * @param tracker
 		 */
 		MemoryManager(Allocator allocator = Allocator(),
-					  BoundsChecker boundsChecker = BoundsChecker(),
-					  Tracker tracker = Tracker());
+					  BoundsChecker boundsChecker = BoundsChecker());
 
 		/**
 		 * Destructor
@@ -62,39 +83,19 @@ enum IS_ARRAY { FALSE, TRUE};
 		/**
 		 * allocate
 		 *
-		 * Allocates memory for one T
-		 * Uses a variation of the intToType template to deduce if the user wants to
-		 *
-		 * 	- allocate a pod type variable or
-		 * 	- construct an object
-		 *
-		 *
-		 * @see MemoryManager::allocate(podness<true>)
-		 * @see MemoryManager::allocate(podness<false>)
-		 *
-		 * @return T*
-		 */
-		template <typename T>
-		T* allocate();
-
-		/**
-		 * allocate
-		 *
 		 * @param size_t n
 		 *
 		 * Allocates memory for n T
-		 * Uses a variation of the intToType template to deduce if the user wants to
 		 *
-		 * 	- allocate an array of pod type variables or
-		 * 	- construct an array of objects
+		 * @remark Internally uses compile time function lookup.
 		 *
 		 * @see MemoryManager::allocate(podness<true>, size_t n)
 		 * @see MemoryManager::allocate(podness<false>, size_t n)
 		 *
 		 * @return T*
 		 */
-		template <typename T>
-		T* allocate(size_t n);
+		template <typename T, size_t = 1>
+		T* allocate();
 
 		/**
 		 * deallocate
@@ -118,16 +119,16 @@ enum IS_ARRAY { FALSE, TRUE};
 	private:
 
 		template <typename T>
-		T* allocate(podness<true>, size_t n);
+		Allocation<T> allocate(podness<true>, arrayallocation<true>, size_t n);
 
 		template <typename T>
-		T* allocate(podness<false>, size_t n);
+		Allocation<T> allocate(podness<false>, arrayallocation<true>, size_t n);
 
 		template <typename T>
-		T* allocate(podness<true>);
+		Allocation<T> allocate(podness<true>, arrayallocation<false>, size_t n);
 
 		template <typename T>
-		T* allocate(podness<false>);
+		Allocation<T> allocate(podness<false>, arrayallocation<false>, size_t n);
 
 		template <typename T>
 		void deallocate(podness<true>, T*& addr, arrayness<true>);
@@ -147,52 +148,41 @@ enum IS_ARRAY { FALSE, TRUE};
 
 		Allocator mAllocator;
 		BoundsChecker mBoundsChecker;
-		Tracker mTracker;
 	};
 
-	template <class Allocator, class BoundsChecker, class Tracker>
-	MemoryManager<Allocator, BoundsChecker, Tracker>::MemoryManager(Allocator allocator, BoundsChecker boundsChecker, Tracker tracker) :
+	template <class Allocator, class BoundsChecker>
+	MemoryManager<Allocator, BoundsChecker>::MemoryManager(Allocator allocator, BoundsChecker boundsChecker) :
 													mAllocator(std::move(allocator)),
-													mBoundsChecker(std::move(boundsChecker)),
-													mTracker(std::move(tracker)) {
-		mTracker.open("log.txt");
+													mBoundsChecker(std::move(boundsChecker)) {
+
 	}
 
-	template <class Allocator, class BoundsChecker, class Tracker>
-	MemoryManager<Allocator, BoundsChecker, Tracker>::~MemoryManager() {
+	template <class Allocator, class BoundsChecker>
+	MemoryManager<Allocator, BoundsChecker>::~MemoryManager() {
 	}
 
-	template <class Allocator, class BoundsChecker, class Tracker>
+	template <class Allocator, class BoundsChecker>
+	template <typename T, size_t n>
+	T* MemoryManager<Allocator, BoundsChecker>::allocate() {
+		Allocation<T> alloc = allocate<T>(podness<std::is_pod<T>::value >(), arrayallocation<wasarrayallocation<n>::value>(), n);
+
+#ifdef ONDRALUK_TRACKING
+		LOG(1, debuglib::logger::DEBUG, "Memory allocated:\n"
+				"\tstartaddress: %#08x\n"
+				"\tnumInstances: %u \n"
+				"\trequested size: %u \n"
+				"\tinternal size: %u \n"
+				"\tline: %u\n", alloc.mByte, n, n*sizeof(T), alloc.mInternalSize, __LINE__);
+#endif
+
+		return alloc.mT;
+	}
+
+	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate() {
-		union
-		{
-			void* asVoid;
-			T* asT;
-		 };
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<true>, arrayallocation<true>, size_t n) {
 
-		asT = allocate<T>(podness<std::is_pod<T>::value >());
-		mTracker.track(asVoid, sizeof(T), sizeof(T), __LINE__);
-		return asT;
-	}
-
-	template <class Allocator, class BoundsChecker, class Tracker>
-	template <typename T>
-	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate(size_t n) {
-		union
-		{
-			void* asVoid;
-			T* asT;
-		 };
-
-		asT = allocate<T>(podness<std::is_pod<T>::value >(), n);
-		mTracker.track(asVoid, n * sizeof(T), n * sizeof(T), __LINE__);
-		return asT;
-	}
-
-	template <class Allocator, class BoundsChecker, class Tracker>
-	template <typename T>
-	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate(podness<true>, size_t n) {
+		Allocation<T> allocation;
 
 		union
 	    {
@@ -203,18 +193,25 @@ enum IS_ARRAY { FALSE, TRUE};
 	     };
 
 		size_t size = sizeof(T)*n + sizeof(size_t)+2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION;
+
 		asVoid = mAllocator.allocate(size);
 
 		mBoundsChecker.fill(asVoid, size);
 
 		asByte += (mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION);
 
-		return asT;
+		allocation.mVoid = asVoid;
+		allocation.mInternalSize = size;
+
+		return allocation;
 	}
 
-	template <class Allocator, class BoundsChecker, class Tracker>
+	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate(podness<false>, size_t n) {
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<false>, arrayallocation<true>, size_t n) {
+
+		Allocation<T> allocation;
+
 		union
 		  {
 		    void* asVoid;
@@ -237,6 +234,9 @@ enum IS_ARRAY { FALSE, TRUE};
 		asByte += sizeof(size_t);
 
 
+		allocation.mVoid = asVoid;
+		allocation.mInternalSize = size;
+
 		const T* const beforeLast = asT + n;
 		while(asT < beforeLast) {
 			new (asT)T;
@@ -244,12 +244,14 @@ enum IS_ARRAY { FALSE, TRUE};
 		}
 
 		// return pointer to the first instance
-		return (asT - n);
+		return allocation;
 	}
 
-	template <class Allocator, class BoundsChecker, class Tracker>
+	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate(podness<false>) {
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<false>, arrayallocation<false>, size_t n) {
+		Allocation<T> allocation;
+
 		size_t size = sizeof(T)+2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION;
 
 		void* addr = mAllocator.allocate(size);
@@ -266,13 +268,19 @@ enum IS_ARRAY { FALSE, TRUE};
 
 		asByte += (mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION);
 
-		T* obj = new (asVoid) T;
-		return obj;
+		allocation.mVoid = asVoid;
+		allocation.mInternalSize = size;
+
+		new (asVoid) T;
+
+		return allocation;
 	}
 
-	template <class Allocator, class BoundsChecker, class Tracker>
+	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	T* MemoryManager<Allocator, BoundsChecker, Tracker>::allocate(podness<true>) {
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<true>, arrayallocation<false>, size_t n) {
+		Allocation<T> allocation;
+
 		size_t size = sizeof(T)+2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION;
 
 		void* addr = mAllocator.allocate(size);
@@ -289,21 +297,24 @@ enum IS_ARRAY { FALSE, TRUE};
 
 		asByte += (mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION);
 
+		allocation.mVoid = asVoid;
+		allocation.mInternalSize = size;
 
 		return asT;
 	}
 
 
-	template <class Allocator, class BoundsChecker, class Tracker>
+	template <class Allocator, class BoundsChecker>
 	template <typename T, IS_ARRAY E>
-	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocate(T* addr) {
+	void MemoryManager<Allocator, BoundsChecker>::deallocate(T* addr) {
 
-		mBoundsChecker.check(addr, arrayajustment<arrayness<E>::value>::adjustment);
+		mBoundsChecker.check(addr, arrayadjustment<arrayness<E>::value>::adjustment);
 
 		union {
 			void* asVoid;
 			unsigned char* asByte;
 		};
+
 
 		deallocate<T>(podness<std::is_pod<T>::value >(), addr, arrayness<E>());
 
@@ -313,19 +324,20 @@ enum IS_ARRAY { FALSE, TRUE};
 		mAllocator.free(asVoid);
 	}
 
-	template <class Allocator, class BoundsChecker, class Tracker>
+	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocate(podness<true>, T*& addr, arrayness<true>) {
+	void MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*& addr, arrayness<true>) {
 	}
 
-	template <class Allocator, class BoundsChecker, class Tracker>
+	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocate(podness<false>, T*& addr, arrayness<true>) {
+	void MemoryManager<Allocator, BoundsChecker>::deallocate(podness<false>, T*& addr, arrayness<true>) {
 		union
 		{
 			size_t* asSizeT;
 			T* asT;
 			unsigned char* asByte;
+			void* asVoid;
 		};
 
 		// set to address
@@ -344,14 +356,14 @@ enum IS_ARRAY { FALSE, TRUE};
 		addr = asT;
 	}
 
-	template <class Allocator, class BoundsChecker, class Tracker>
+	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocate(podness<true>, T*&, arrayness<false>) {
+	void MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*&, arrayness<false>) {
 	}
 
-	template <class Allocator, class BoundsChecker, class Tracker>
+	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	void MemoryManager<Allocator, BoundsChecker, Tracker>::deallocate(podness<false>, T*& addr, arrayness<false>) {
+	void MemoryManager<Allocator, BoundsChecker>::deallocate(podness<false>, T*& addr, arrayness<false>) {
 		addr->~T();
 	}
 }
