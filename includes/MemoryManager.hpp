@@ -59,12 +59,16 @@ namespace ondraluk {
 
 		template <typename T>
 		struct Allocation {
+			Allocation() : mInternalSize(0), mNumInstances(1) {}
+			Allocation(size_t internalsize) : mInternalSize(internalsize), mNumInstances(1) {}
+
 			union {
 				unsigned char* mByte;
 				void* mVoid;
 				T* mT;
 			};
 			size_t mInternalSize;
+			size_t mNumInstances;
 		};
 
 		/**
@@ -120,28 +124,53 @@ namespace ondraluk {
 	private:
 
 		template <typename T>
+#ifdef _WIN32
 		typename Allocation<T> allocate(podness<true>, arrayallocation<true>, size_t n);
-
+#else
+		Allocation<T> allocate(podness<true>, arrayallocation<true>, size_t n);
+#endif
 		template <typename T>
+#ifdef _WIN32
 		typename Allocation<T> allocate(podness<false>, arrayallocation<true>, size_t n);
-
+#else
+		Allocation<T> allocate(podness<false>, arrayallocation<true>, size_t n);
+#endif
 		template <typename T>
+#ifdef _WIN32
 		typename Allocation<T> allocate(podness<true>, arrayallocation<false>, size_t n);
-
+#else
+		Allocation<T> allocate(podness<true>, arrayallocation<false>, size_t n);
+#endif
 		template <typename T>
+#ifdef _WIN32
 		typename Allocation<T> allocate(podness<false>, arrayallocation<false>, size_t n);
-
+#else
+		Allocation<T> allocate(podness<false>, arrayallocation<false>, size_t n);
+#endif
 		template <typename T>
-		void deallocate(podness<true>, T*& addr, arrayness<true>);
-
+#ifdef _WIN32
+		typename Allocation<T> deallocate(podness<true>, T*& addr, arrayness<true>);
+#else
+		Allocation<T> deallocate(podness<true>, T*& addr, arrayness<true>);
+#endif
 		template <typename T>
-		void deallocate(podness<false>, T*& addr, arrayness<true>);
-
+#ifdef _WIN32
+		typename Allocation<T> deallocate(podness<false>, T*& addr, arrayness<true>);
+#else
+		Allocation<T> deallocate(podness<false>, T*& addr, arrayness<true>);
+#endif
 		template <typename T>
-		void deallocate(podness<true>, T*& addr, arrayness<false>);
-
+#ifdef _WIN32
+		typename Allocation<T> deallocate(podness<true>, T*& addr, arrayness<false>);
+#else
+		Allocation<T> deallocate(podness<true>, T*& addr, arrayness<false>);
+#endif
 		template <typename T>
-		void deallocate(podness<false>, T*& addr, arrayness<false>);
+#ifdef _WIN32
+		typename Allocation<T> deallocate(podness<false>, T*& addr, arrayness<false>);
+#else
+		Allocation<T> deallocate(podness<false>, T*& addr, arrayness<false>);
+#endif
 
 		/**
 		 * Variables
@@ -167,13 +196,15 @@ namespace ondraluk {
 	T* MemoryManager<Allocator, BoundsChecker>::allocate() {
 		Allocation<T> alloc = allocate<T>(podness<std::is_pod<T>::value >(), arrayallocation<wasarrayallocation<n>::value>(), n);
 
+		alloc.mNumInstances = n;
+
 #ifdef ONDRALUK_TRACKING
-		LOG(1, debuglib::logger::DEBUG, "Memory allocated:\n"
+		LOG(1, debuglib::logger::DEBUG, "\nMemory allocated:\n"
 				"\tstartaddress: %#08x\n"
 				"\tnumInstances: %u \n"
-				"\trequested size: %u \n"
-				"\tinternal size: %u \n"
-				"\tline: %u\n", alloc.mByte, n, n*sizeof(T), alloc.mInternalSize, __LINE__);
+				"\trequested size: %u byte(s) \n"
+				"\tinternal size: %u byte(s) \n"
+				"\tline: %u\n", alloc.mByte, alloc.mNumInstances, alloc.mNumInstances * sizeof(T), alloc.mInternalSize, __LINE__);
 #endif
 
 		return alloc.mT;
@@ -181,7 +212,11 @@ namespace ondraluk {
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
+#ifdef _WIN32
 	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<true>, arrayallocation<true>, size_t n) {
+#else
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<true>, arrayallocation<true>, size_t n) {
+#endif
 
 		Allocation<T> allocation;
 
@@ -209,8 +244,11 @@ namespace ondraluk {
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
+#ifdef _WIN32
 	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<false>, arrayallocation<true>, size_t n) {
-
+#else
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<false>, arrayallocation<true>, size_t n) {
+#endif
 		Allocation<T> allocation;
 
 		union
@@ -250,7 +288,11 @@ namespace ondraluk {
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
+#ifdef _WIN32
 	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<false>, arrayallocation<false>, size_t n) {
+#else
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<false>, arrayallocation<false>, size_t n) {
+#endif
 		Allocation<T> allocation;
 
 		size_t size = sizeof(T)+2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION;
@@ -279,7 +321,11 @@ namespace ondraluk {
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
+#ifdef _WIN32
 	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<true>, arrayallocation<false>, size_t n) {
+#else
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<true>, arrayallocation<false>, size_t n) {
+#endif
 		Allocation<T> allocation;
 
 		size_t size = sizeof(T)+2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION;
@@ -301,13 +347,14 @@ namespace ondraluk {
 		allocation.mVoid = asVoid;
 		allocation.mInternalSize = size;
 
-		return asT;
+		return allocation;
 	}
 
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T, ARRAY::ENUM E>
 	void MemoryManager<Allocator, BoundsChecker>::deallocate(T* addr) {
+		Allocation<T> alloc;
 
 		mBoundsChecker.check(addr, arrayadjustment<arrayness<E>::value>::adjustment);
 
@@ -316,10 +363,21 @@ namespace ondraluk {
 			unsigned char* asByte;
 		};
 
-
-		deallocate<T>(podness<std::is_pod<T>::value >(), addr, arrayness<E>());
+		alloc = deallocate<T>(podness<std::is_pod<T>::value >(), addr, arrayness<E>());
 
 		asVoid = addr;
+
+		alloc.mVoid = asVoid;
+
+#ifdef ONDRALUK_TRACKING
+		LOG(1, debuglib::logger::DEBUG, "\nMemory deallocated:\n"
+				"\tstartaddress: %#08x\n"
+				"\tnumInstances: %u \n"
+				"\trequested size: %u byte(s) \n"
+				"\tinternal size: %u byte(s) \n"
+				"\tline: %u\n", alloc.mByte, alloc.mNumInstances, alloc.mNumInstances * sizeof(T), alloc.mInternalSize, __LINE__);
+#endif
+
 		asByte -= mBoundsChecker.BOUNDSIZE;
 
 		mAllocator.free(asVoid);
@@ -327,12 +385,23 @@ namespace ondraluk {
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	void MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*& addr, arrayness<true>) {
+#ifdef _WIN32
+	typedef MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*& addr, arrayness<true>) {
+#else
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*& addr, arrayness<true>) {
+		return Allocation<T>(sizeof(T));
+#endif
 	}
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	void MemoryManager<Allocator, BoundsChecker>::deallocate(podness<false>, T*& addr, arrayness<true>) {
+#ifdef _WIN32
+	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<false>, T*& addr, arrayness<true>) {
+#else
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<false>, T*& addr, arrayness<true>) {
+#endif
+		Allocation<T> allocation;
+
 		union
 		{
 			size_t* asSizeT;
@@ -347,6 +416,10 @@ namespace ondraluk {
 		// get the size which is stored in the bytes before the instance
 		const size_t n = asSizeT[-1];
 
+		allocation.mVoid = asVoid;
+		allocation.mNumInstances = n;
+		allocation.mInternalSize = n * sizeof(T);
+
 		// destruct from top
 		for (size_t i = n - 1; i > 0; --i) {
 			asT[i].~T();
@@ -355,17 +428,29 @@ namespace ondraluk {
 		asByte -= sizeof(size_t);
 
 		addr = asT;
+
+		return allocation;
 	}
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	void MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*&, arrayness<false>) {
+#ifdef _WIN32
+	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*&, arrayness<false>) {
+#else
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*&, arrayness<false>) {
+#endif
+		return Allocation<T>(sizeof(T));
 	}
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	void MemoryManager<Allocator, BoundsChecker>::deallocate(podness<false>, T*& addr, arrayness<false>) {
+#ifdef _WIN32
+	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<false>, T*& addr, arrayness<false>) {
+#else
+	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<false>, T*& addr, arrayness<false>) {
+#endif
 		addr->~T();
+		return Allocation<T>(sizeof(T));
 	}
 }
 
