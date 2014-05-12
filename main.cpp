@@ -154,7 +154,7 @@ int main() {
 		
 	//myStruct* ms = memoryManager.allocate<myStruct>(2);
 
-	memoryManager.deallocate<int, IS_ARRAY::FALSE>(t);
+	memoryManager.deallocate<int, ARRAY::ENUM::NO>(t);
 //
 //	memoryManager.deallocate<myStruct, IS_ARRAY::TRUE>(ms);
 

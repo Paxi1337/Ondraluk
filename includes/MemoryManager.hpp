@@ -39,8 +39,9 @@ template <> struct arrayadjustment<true> { static const size_t adjustment = 4; }
 
 namespace ondraluk {
 
-	enum IS_ARRAY { FALSE, TRUE};
-
+	struct ARRAY {
+		enum ENUM { NO , YES};
+	};
 	/**
 	 * MemoryManager
 	 *
@@ -113,22 +114,22 @@ namespace ondraluk {
 		 *
 		 * @return void
 		 */
-		template <typename T, IS_ARRAY E>
+		template <typename T, ARRAY::ENUM E>
 		void deallocate(T* addr);
 
 	private:
 
 		template <typename T>
-		Allocation<T> allocate(podness<true>, arrayallocation<true>, size_t n);
+		typename Allocation<T> allocate(podness<true>, arrayallocation<true>, size_t n);
 
 		template <typename T>
-		Allocation<T> allocate(podness<false>, arrayallocation<true>, size_t n);
+		typename Allocation<T> allocate(podness<false>, arrayallocation<true>, size_t n);
 
 		template <typename T>
-		Allocation<T> allocate(podness<true>, arrayallocation<false>, size_t n);
+		typename Allocation<T> allocate(podness<true>, arrayallocation<false>, size_t n);
 
 		template <typename T>
-		Allocation<T> allocate(podness<false>, arrayallocation<false>, size_t n);
+		typename Allocation<T> allocate(podness<false>, arrayallocation<false>, size_t n);
 
 		template <typename T>
 		void deallocate(podness<true>, T*& addr, arrayness<true>);
@@ -180,7 +181,7 @@ namespace ondraluk {
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<true>, arrayallocation<true>, size_t n) {
+	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<true>, arrayallocation<true>, size_t n) {
 
 		Allocation<T> allocation;
 
@@ -208,7 +209,7 @@ namespace ondraluk {
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<false>, arrayallocation<true>, size_t n) {
+	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<false>, arrayallocation<true>, size_t n) {
 
 		Allocation<T> allocation;
 
@@ -249,7 +250,7 @@ namespace ondraluk {
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<false>, arrayallocation<false>, size_t n) {
+	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<false>, arrayallocation<false>, size_t n) {
 		Allocation<T> allocation;
 
 		size_t size = sizeof(T)+2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION;
@@ -278,7 +279,7 @@ namespace ondraluk {
 
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
-	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<true>, arrayallocation<false>, size_t n) {
+	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::allocate(podness<true>, arrayallocation<false>, size_t n) {
 		Allocation<T> allocation;
 
 		size_t size = sizeof(T)+2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION;
@@ -305,7 +306,7 @@ namespace ondraluk {
 
 
 	template <class Allocator, class BoundsChecker>
-	template <typename T, IS_ARRAY E>
+	template <typename T, ARRAY::ENUM E>
 	void MemoryManager<Allocator, BoundsChecker>::deallocate(T* addr) {
 
 		mBoundsChecker.check(addr, arrayadjustment<arrayness<E>::value>::adjustment);
