@@ -33,7 +33,6 @@ struct wasarrayallocation {
 	static const bool value = n > 1;
 };
 
-
 template <bool> struct arrayadjustment { static const size_t adjustment = 0; };
 template <> struct arrayadjustment<true> { static const size_t adjustment = 4; };
 
@@ -52,11 +51,60 @@ namespace ondraluk {
 	 * Interoperates with the given policies to
 	 * 	-allocate / deallocate memory
 	 * 	-bounds checking
+	 *
+	 * Tested with gcc4.8, clang3.5, msvc2013
 	 */
 	template <class Allocator, class BoundsChecker>
 	class MemoryManager {
 	public:
 
+		/**
+		 * Constructor
+		 *
+		 * @param allocator The used allocator
+		 * @param boundsChecker The used boundschecker
+		 */
+		MemoryManager(Allocator allocator = Allocator(),
+					  BoundsChecker boundsChecker = BoundsChecker());
+
+		/**
+		 * Destructor
+		 */
+		~MemoryManager();
+
+		/**
+		 * Allocate
+		 *
+		 * @param size_t n
+		 *
+		 * Allocates memory for n * T
+		 *
+		 * @remark Internally uses compile time function lookup for differentiating between array, pods etc.
+		 *		   May reserve more memory than actually requested because of boundschecking, tracking ..
+		 *
+		 * @return T*
+		 */
+		template <typename T, size_t = 1>
+		T* allocate();
+
+		/**
+		 * Deallocate
+		 *
+		 * @param T* addr
+		 *
+		 * Deallocates the memory at given addr
+		 *
+		 * @remark Internally uses compile time function lookup for differentiating between array, pods etc.
+		 *
+		 * @return void
+		 */
+		template <typename T, ARRAY::ENUM E>
+		void deallocate(T* addr);
+
+	private:
+
+		// Encapsulates some information about an allocation
+		// Mainly used for tracking
 		template <typename T>
 		struct Allocation {
 			Allocation() : mInternalSize(0), mNumInstances(1) {}
@@ -70,58 +118,6 @@ namespace ondraluk {
 			size_t mInternalSize;
 			size_t mNumInstances;
 		};
-
-		/**
-		 * Constructor
-		 *
-		 * @param allocator
-		 * @param boundsChecker
-		 */
-		MemoryManager(Allocator allocator = Allocator(),
-					  BoundsChecker boundsChecker = BoundsChecker());
-
-		/**
-		 * Destructor
-		 */
-		~MemoryManager();
-
-		/**
-		 * allocate
-		 *
-		 * @param size_t n
-		 *
-		 * Allocates memory for n T
-		 *
-		 * @remark Internally uses compile time function lookup.
-		 *
-		 * @see MemoryManager::allocate(podness<true>, size_t n)
-		 * @see MemoryManager::allocate(podness<false>, size_t n)
-		 *
-		 * @return T*
-		 */
-		template <typename T, size_t = 1>
-		T* allocate();
-
-		/**
-		 * deallocate
-		 *
-		 * @param T* addr
-		 *
-		 * Deallocates the memory at given addr
-		 * Second template parameter declares the arrayness
-		 * Uses a variation of the intToType template to deduce if the user wants to
-		 *
-		 * 	- deallocate pod(s) or
-		 * 	- destruct object(s)
-		 *
-		 * @see MemoryManager::deallocate(T* addr)
-		 *
-		 * @return void
-		 */
-		template <typename T, ARRAY::ENUM E>
-		void deallocate(T* addr);
-
-	private:
 
 		template <typename T>
 #ifdef _WIN32
@@ -235,6 +231,10 @@ namespace ondraluk {
 		mBoundsChecker.fill(asVoid, size);
 
 		asByte += (mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION);
+
+		*asSizeT = n;
+
+		asByte += sizeof(size_t);
 
 		allocation.mVoid = asVoid;
 		allocation.mInternalSize = size;
@@ -386,11 +386,28 @@ namespace ondraluk {
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
 #ifdef _WIN32
-	typedef MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*& addr, arrayness<true>) {
+	typename MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*& addr, arrayness<true>) {
 #else
 	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*& addr, arrayness<true>) {
-		return Allocation<T>(sizeof(T));
 #endif
+		union
+		{
+			size_t* asSizeT;
+			T* asT;
+			unsigned char* asByte;
+			void* asVoid;
+		};
+
+		// set to address
+		asT = addr;
+
+		Allocation<T> allocation;
+		// get the size which is stored in the bytes before the instance
+		const size_t n = asSizeT[-1];
+		allocation.mNumInstances = n;
+		allocation.mInternalSize = n * sizeof(T)+2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION + sizeof(size_t);
+		return allocation;
+		
 	}
 
 	template <class Allocator, class BoundsChecker>
@@ -418,7 +435,7 @@ namespace ondraluk {
 
 		allocation.mVoid = asVoid;
 		allocation.mNumInstances = n;
-		allocation.mInternalSize = n * sizeof(T);
+		allocation.mInternalSize = n * sizeof(T)+2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION + sizeof(size_t);
 
 		// destruct from top
 		for (size_t i = n - 1; i > 0; --i) {
@@ -439,7 +456,12 @@ namespace ondraluk {
 #else
 	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<true>, T*&, arrayness<false>) {
 #endif
-		return Allocation<T>(sizeof(T));
+		Allocation<T> allocation;
+		
+		allocation.mNumInstances = 1;
+		allocation.mInternalSize = sizeof(T) +2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION;
+
+		return allocation;
 	}
 
 	template <class Allocator, class BoundsChecker>
@@ -449,8 +471,13 @@ namespace ondraluk {
 #else
 	MemoryManager<Allocator, BoundsChecker>::Allocation<T> MemoryManager<Allocator, BoundsChecker>::deallocate(podness<false>, T*& addr, arrayness<false>) {
 #endif
+		Allocation<T> allocation;
+
+		allocation.mNumInstances = 1;
+		allocation.mInternalSize = sizeof(T) +2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION;
+
 		addr->~T();
-		return Allocation<T>(sizeof(T));
+		return allocation;
 	}
 }
 

@@ -139,22 +139,19 @@ int main() {
 
 	ConsoleLogger g;
 
-	LinearAllocator la(1000);
-	MemoryManager<LinearAllocator, BoundsCheckingPolicy<4, 0xEF>> memoryManager(LinearAllocator(2000), BoundsCheckingPolicy<4, 0xEF>());
-	//MemoryManager<LinearAllocator, NoBoundsCheckingPolicy, NoMemoryTracking> memoryManager2(LinearAllocator(2000));
+	MemoryManager<LinearAllocator, BoundsCheckingPolicy<4, 0xEF>> memoryManager(LinearAllocator(2000));
 
-	int* t = memoryManager.allocate<int, 4>();
+	char* t = memoryManager.allocate<char, 10>();
+
+	memoryManager.deallocate<char, ARRAY::ENUM::YES>(t);
+
+	char* ch = memoryManager.allocate<char>();
 
 	//char* tCh = reinterpret_cast<char*>(t);
-	//tCh--;
-	//*tCh = 0xDD;
+	//*(ch-1) = 0xDD;
 
+	memoryManager.deallocate<char, ARRAY::ENUM::NO>(ch);
 
-	//int* tp = memoryManager2.allocate<int>();
-		
-	//myStruct* ms = memoryManager.allocate<myStruct>(2);
-
-	memoryManager.deallocate<int, ARRAY::ENUM::NO>(t);
 //
 //	memoryManager.deallocate<myStruct, IS_ARRAY::TRUE>(ms);
 
