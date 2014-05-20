@@ -49,11 +49,8 @@ struct BoundsCheckingPolicy {
 
 		asVoid = begin;
 
-		*asSizeT = size;
-		asByte += sizeof(size_t);
-
 		memset(asVoid, SYMBOL, BOUNDSIZE);
-		asByte += size - BOUNDSIZE - SIZEOFALLOCATION;
+		asByte += size - BOUNDSIZE - sizeof(size_t);
 		memset(asVoid, SYMBOL, BOUNDSIZE);
 	}
 
@@ -67,7 +64,7 @@ struct BoundsCheckingPolicy {
 	 *
 	 * @return void
 	 */
-	void check(void* begin, size_t adjustment = 0) const {
+	void check(void* begin, size_t size) const {
 		union {
 			unsigned char* asByte;
 			size_t* asSizeT;
@@ -76,18 +73,14 @@ struct BoundsCheckingPolicy {
 
 		asVoid = begin;
 		
-		asByte -= (SIZEOFALLOCATION + BOUNDSIZE + adjustment);
-
-		size_t allocationSize = *asSizeT;
-
-		asByte += SIZEOFALLOCATION;
+		asByte -= BOUNDSIZE;
 
 		int tmp[N];
 		memset(tmp, SYMBOL, N);
 
 		if (memcmp(asVoid, tmp, N) == 0) {
 
-			asByte += (allocationSize - BOUNDSIZE - SIZEOFALLOCATION);
+			asByte += size + BOUNDSIZE;
 			if (memcmp(asVoid, tmp, N) == 0) {
 				return;
 			}
@@ -98,7 +91,6 @@ struct BoundsCheckingPolicy {
 
 	static_assert(N > 1, "N < 2");
 	size_t BOUNDSIZE = N;
-	size_t SIZEOFALLOCATION = sizeof(size_t);
 	int SYMBOL = S;
 };
 
@@ -111,7 +103,6 @@ struct BoundsCheckingPolicy<0, 0> {
 	void check(void*, size_t adjustment = 0) const {};
 
 	size_t BOUNDSIZE = 0;
-	size_t SIZEOFALLOCATION = 0;
 };
 
 typedef BoundsCheckingPolicy<0,0> NoBoundsCheckingPolicy;
@@ -141,7 +132,7 @@ int main() {
 
 	MemoryManager<LinearAllocator, BoundsCheckingPolicy<4, 0xEF>> memoryManager(LinearAllocator(2000));
 
-	char* t = memoryManager.allocate<char, 10>();
+	char* t = memoryManager.allocate<char>(10);
 
 	memoryManager.deallocate<char, ARRAY::ENUM::YES>(t);
 
