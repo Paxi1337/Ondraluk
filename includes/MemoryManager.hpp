@@ -14,6 +14,7 @@
 #include <new>
 #include <type_traits>
 #include <utility>
+#include <cassert>
 
 #define ONDRALUK_TRACKING 1
 
@@ -35,6 +36,93 @@ struct wasarrayallocation {
 
 template <bool> struct arrayadjustment { static const size_t adjustment = 0; };
 template <> struct arrayadjustment<true> { static const size_t adjustment = 4; };
+
+/**
+* BoundsCheckingPolicy
+*
+* Provides functions to fill memory with a given symbol and later check if the bounds were exceeded to
+* locate memory leaks
+*/
+template <size_t N, int S>
+struct BoundsCheckingPolicy {
+
+	/**
+	* fill
+	*
+	* @param void* begin
+	* @param size_t size
+
+	* Fills BOUNDSIZE bytes at beginning and end at given memory addr with SYMBOL
+	*
+	* @return void
+	*/
+	void fill(void* begin, size_t size) const {
+
+		union {
+			unsigned char* asByte;
+			size_t* asSizeT;
+			void* asVoid;
+		};
+
+		asVoid = begin;
+
+		memset(asVoid, SYMBOL, BOUNDSIZE);
+		asByte += size - BOUNDSIZE - sizeof(size_t);
+		memset(asVoid, SYMBOL, BOUNDSIZE);
+	}
+
+	/**
+	* check
+	*
+	* @param void* begin
+	* @param size_t adujstment
+
+	* Fills BOUNDSIZE bytes at beginning and end at given memory addr with SYMBOL
+	*
+	* @return void
+	*/
+	void check(void* begin, size_t size) const {
+		union {
+			unsigned char* asByte;
+			size_t* asSizeT;
+			void* asVoid;
+		};
+
+		asVoid = begin;
+
+		asByte -= BOUNDSIZE;
+
+		int tmp[N];
+		memset(tmp, SYMBOL, N);
+
+		if (memcmp(asVoid, tmp, N) == 0) {
+
+			asByte += size + BOUNDSIZE;
+			if (memcmp(asVoid, tmp, N) == 0) {
+				return;
+			}
+		}
+
+		assert(false);
+	}
+
+	static_assert(N > 1, "N < 2");
+	size_t BOUNDSIZE = N;
+	int SYMBOL = S;
+};
+
+/**
+* Specialization of a BoundsCheckingPolicy with 0-byte size
+*/
+template <>
+struct BoundsCheckingPolicy<0, 0> {
+	void fill(void*, size_t) const {};
+	void check(void*, size_t adjustment = 0) const {};
+
+	size_t BOUNDSIZE = 0;
+};
+
+typedef BoundsCheckingPolicy<0, 0> NoBoundsCheckingPolicy;
 
 namespace ondraluk {
 
