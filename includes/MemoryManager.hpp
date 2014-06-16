@@ -119,8 +119,8 @@ namespace ondraluk {
 		// Mainly used for tracking
 		template <typename T>
 		struct Allocation {
-			Allocation() : mInternalSize(0), mNumInstances(1) {}
-			Allocation(size_t internalsize) : mInternalSize(internalsize), mNumInstances(1) {}
+			Allocation() : mInternalSize(0), mSize(0) {}
+			Allocation(size_t internalsize) : mInternalSize(internalsize), mSize(0) {}
 
 			union {
 				unsigned char* mByte;
@@ -128,7 +128,7 @@ namespace ondraluk {
 				T* mT;
 			};
 			size_t mInternalSize;
-			size_t mNumInstances;
+			size_t mSize;
 		};
 
 		template <typename T>
@@ -191,7 +191,7 @@ namespace ondraluk {
 	T* MemoryManager<Allocator, BoundsChecker>::allocate() {
 		Allocation<T> alloc = allocate<T>(podness<std::is_pod<T>::value >(), arrayallocation<false>(), 1);
 
-		alloc.mNumInstances = 1;
+		alloc.mSize = sizeof(T);
 
 #ifdef ONDRALUK_TRACKING
 		LOG(1, debuglib::logger::DEBUG, "\nMemory allocated:\n"
@@ -199,7 +199,7 @@ namespace ondraluk {
 				"\tnumInstances: %u \n"
 				"\trequested size: %u byte(s) \n"
 				"\tinternal size: %u byte(s) \n"
-				"\tline: %u\n", alloc.mByte, alloc.mNumInstances, alloc.mNumInstances * sizeof(T), alloc.mInternalSize, __LINE__);
+				"\tline: %u\n", alloc.mByte, 1, alloc.mSize, alloc.mInternalSize, __LINE__);
 #endif
 
 		return alloc.mT;
@@ -210,7 +210,7 @@ namespace ondraluk {
 	T* MemoryManager<Allocator, BoundsChecker>::allocate(size_t n) {
 		Allocation<T> alloc = allocate<T>(podness<std::is_pod<T>::value >(), arrayallocation<true>(), n);
 
-		alloc.mNumInstances = n;
+		alloc.mSize = n * sizeof(T);
 
 #ifdef ONDRALUK_TRACKING
 		LOG(1, debuglib::logger::DEBUG, "\nMemory allocated:\n"
@@ -218,7 +218,7 @@ namespace ondraluk {
 				"\tnumInstances: %u \n"
 				"\trequested size: %u byte(s) \n"
 				"\tinternal size: %u byte(s) \n"
-				"\tline: %u\n", alloc.mByte, alloc.mNumInstances, alloc.mNumInstances * sizeof(T), alloc.mInternalSize, __LINE__);
+				"\tline: %u\n", alloc.mByte, n, alloc.mSize, alloc.mInternalSize, __LINE__);
 #endif
 
 		return alloc.mT;
@@ -278,19 +278,19 @@ namespace ondraluk {
 		    unsigned char* asByte;
 		  };
 
-		size_t size = sizeof(T) * n + sizeof(size_t) + 2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION;
+		size_t size = sizeof(T) * n + sizeof(size_t) + 2 * mBoundsChecker.BOUNDSIZE;
 
 		// need to allocate + sizeof(size_t) to be able to store n in the four bytes before
 		asVoid = mAllocator.allocate(size);
 
-		mBoundsChecker.fill(asVoid, size);
-
-		asByte += (mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION);
 
 		*asSizeT = sizeof(T) * n;
 
 		asByte += sizeof(size_t);
 
+		mBoundsChecker.fill(asVoid, size);
+
+		asByte += mBoundsChecker.BOUNDSIZE;
 
 		allocation.mVoid = asVoid;
 		allocation.mInternalSize = size;
@@ -314,7 +314,7 @@ namespace ondraluk {
 #endif
 		Allocation<T> allocation;
 
-		size_t size = sizeof(T) + 2 * mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION;
+		size_t size = sizeof(T) + 2 * mBoundsChecker.BOUNDSIZE + sizeof(size_t);
 
 		void* addr = mAllocator.allocate(size);
 
@@ -326,12 +326,13 @@ namespace ondraluk {
 
 		asVoid = addr;
 
+		*asSizeT = sizeof(T) * n;
+
+		asByte += sizeof(size_t);
+
 		mBoundsChecker.fill(asVoid, size);
 
-		asByte += (mBoundsChecker.BOUNDSIZE + mBoundsChecker.SIZEOFALLOCATION);
-
-		*asSizeT = sizeof(T);
-		asByte += sizeof(size_t);
+		asByte += (mBoundsChecker.BOUNDSIZE );
 
 		allocation.mVoid = asVoid;
 		allocation.mInternalSize = size;
@@ -389,12 +390,12 @@ namespace ondraluk {
 		};
 
 		asVoid = addr;
-		asByte -= mBoundsChecker.BOUNDSIZE + sizeof(size_t);
+		asByte -= (mBoundsChecker.BOUNDSIZE + sizeof(size_t));
 
 		size_t size = *asSizeT;
 
-		allocation.mInternalSize = size;
-		allocation.mNumInstances = size / sizeof(T);
+		allocation.mSize = size;
+		allocation.mInternalSize = size + (sizeof(size_t) + 2 * mBoundsChecker.BOUNDSIZE);
 
 		mBoundsChecker.check(addr, size);
 
@@ -410,10 +411,10 @@ namespace ondraluk {
 				"\tnumInstances: %u \n"
 				"\trequested size: %u byte(s) \n"
 				"\tinternal size: %u byte(s) \n"
-				"\tline: %u\n", allocation.mByte, allocation.mNumInstances, allocation.mNumInstances * sizeof(T), allocation.mInternalSize, __LINE__);
+				"\tline: %u\n", allocation.mByte, allocation.mSize / sizeof(T), allocation.mSize, allocation.mInternalSize, __LINE__);
 #endif
 
-		asByte -= mBoundsChecker.BOUNDSIZE + sizeof(size_t);
+		asByte -= (mBoundsChecker.BOUNDSIZE);
 
 		mAllocator.free(asVoid);
 	}
@@ -426,6 +427,7 @@ namespace ondraluk {
 	template <class Allocator, class BoundsChecker>
 	template <typename T>
 	void MemoryManager<Allocator, BoundsChecker>::deallocate(podness<false>, T*& addr, arrayness<true>, size_t size) {
+
 		union
 		{
 			size_t* asSizeT;

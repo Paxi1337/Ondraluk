@@ -136,12 +136,12 @@ int main() {
 
 	memoryManager.deallocate<char, ARRAY::ENUM::YES>(t);
 
-	char* ch = memoryManager.allocate<char>();
+	myStruct* ch = memoryManager.allocate<myStruct>(10);
 
 	//char* tCh = reinterpret_cast<char*>(t);
 	//*(ch-1) = 0xDD;
 
-	memoryManager.deallocate<char, ARRAY::ENUM::NO>(ch);
+	memoryManager.deallocate<myStruct, ARRAY::ENUM::YES>(ch);
 
 //
 //	memoryManager.deallocate<myStruct, IS_ARRAY::TRUE>(ms);
